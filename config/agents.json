@@ -1,0 +1,26 @@
+[
+  {
+    "id": "claude",
+    "name": "Claude Code",
+    "skillsPath": "$HOME/.claude/skills",
+    "enabled": true
+  },
+  {
+    "id": "codex",
+    "name": "Codex",
+    "skillsPath": "$HOME/.codex/skills",
+    "enabled": true
+  },
+  {
+    "id": "cursor",
+    "name": "Cursor",
+    "skillsPath": "$HOME/.cursor/skills",
+    "enabled": true
+  },
+  {
+    "id": "trae",
+    "name": "Trae",
+    "skillsPath": "$HOME/.trae/skills",
+    "enabled": true
+  }
+]
