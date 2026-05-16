@@ -1,6 +1,6 @@
 "use client";
 
-import { FileStack, FolderTree, LayoutGrid } from "lucide-react";
+import { FileStack, FolderTree, LayoutGrid, RadioTower } from "lucide-react";
 
 import { SidebarNav } from "@/src/components/sidebar-nav";
 
@@ -14,8 +14,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
           <div className="topbar-brand">
             <h1 className="brand-name">Skills Hub</h1>
-            <p className="topbar-copy">skills 与全局规则</p>
+            <p className="topbar-copy">本地 skills 与全局规则控制台</p>
           </div>
+        </div>
+        <div className="topbar-status" aria-label="当前运行模式">
+          <RadioTower size={15} />
+          <span>Local console</span>
         </div>
       </header>
       <div className="content-shell content-shell-wide shell-grid">

@@ -1,20 +1,7 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Mono, IBM_Plex_Sans } from "next/font/google";
 
 import "./globals.css";
 import { AppShell } from "@/src/components/app-shell";
-
-const bodyFont = IBM_Plex_Sans({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-body"
-});
-
-const monoFont = IBM_Plex_Mono({
-  subsets: ["latin"],
-  weight: ["400", "500"],
-  variable: "--font-mono"
-});
 
 export const metadata: Metadata = {
   title: "技能中心",
@@ -28,7 +15,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="zh-CN">
-      <body className={`${bodyFont.variable} ${monoFont.variable}`}>
+      <body>
         <AppShell>{children}</AppShell>
       </body>
     </html>

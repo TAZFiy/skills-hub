@@ -25,13 +25,14 @@ export function SidebarNav({ items }: { items: SidebarItem[] }) {
             href={item.href}
             className="nav-link"
             data-active={isActive}
+            aria-current={isActive ? "page" : undefined}
           >
+            <span className="nav-link-icon">
+              <Icon size={18} />
+            </span>
             <span className="nav-link-copy">
               <span className="nav-link-eyebrow">{item.eyebrow}</span>
               <span className="nav-link-label">{item.label}</span>
-            </span>
-            <span className="nav-link-icon">
-              <Icon size={18} />
             </span>
           </Link>
         );
