@@ -58,7 +58,7 @@ export async function scanAllSkills(agents: AgentDefinition[]): Promise<SkillRec
       try {
         const metadata = await readSkillFrontmatter(master.skillFilePath);
         return {
-          name: metadata.data.name || skillName,
+          name: skillName,
           description: metadata.data.description || "未提供描述。",
           sourcePath: master.skillPath,
           masterAgentId: master.agentId,

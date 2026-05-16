@@ -22,6 +22,7 @@
 - 查看各 agent 的安装状态
 - 搜索、筛选待同步 / 异常 / 外部条目
 - 批量同步缺失或漂移的副本
+- 输入 GitHub skill 项目地址或本地目录，一次安装到所有启用的 agent skills 目录
 - 直接在列表中标记“自制”或删除已安装副本
 - 查看目标安装路径和 `SKILL.md` 内容
 
@@ -94,6 +95,7 @@ tests/fixtures/         测试夹具
 
 - `GET /api/overview`
 - `POST /api/sync/apply`
+- `POST /api/skills/install`
 - `DELETE /api/sync/remove`
 - `POST /api/custom-tag`
 - `DELETE /api/custom-tag`
@@ -112,5 +114,6 @@ npx tsc --noEmit
 ## 说明
 
 - 这是一个偏本地工作台性质的项目，很多能力会直接读取当前机器上的目录和规则文件。
+- skill 安装支持 GitHub 仓库地址和本地目录；根目录或一级子目录中包含 `SKILL.md` 的目录会被识别为 skill，目标目录已存在时会跳过而不是覆盖。
 - 全局规则编辑当前刻意收敛为最小能力集，只支持编辑两个现有主文件，不支持创建额外规则层。
 - 如果你准备部署到其他机器，请先确认目标环境存在对应的 agent 目录和配置文件。

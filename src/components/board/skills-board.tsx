@@ -1,7 +1,20 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { Code2, HardDriveDownload, LoaderCircle, Search } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Code2,
+  Eye,
+  HardDriveDownload,
+  LoaderCircle,
+  PackagePlus,
+  Search,
+  Tag,
+  Trash2,
+  TriangleAlert,
+  X
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 
 import type { SkillBoardModel } from "@/src/types/board";
@@ -12,6 +25,13 @@ const displayStatusLabel = {
   broken: "异常"
 } as const;
 
+type InstallResult = {
+  discovered: Array<{ name: string }>;
+  completed: unknown[];
+  skipped: unknown[];
+  failed: unknown[];
+};
+
 export function SkillsBoard({ model }: { model: SkillBoardModel }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -19,6 +39,8 @@ export function SkillsBoard({ model }: { model: SkillBoardModel }) {
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const [selectedNames, setSelectedNames] = useState<string[]>([]);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [installSource, setInstallSource] = useState("");
+  const [installResult, setInstallResult] = useState<InstallResult | null>(null);
   const [isPending, startTransition] = useTransition();
   const [busyAction, setBusyAction] = useState<string | null>(null);
 
@@ -55,13 +77,17 @@ export function SkillsBoard({ model }: { model: SkillBoardModel }) {
   const counts = useMemo(
     () => ({
       all: model.rows.length,
+      installed: model.rows.filter((row) =>
+        row.cells.every((cell) => cell.displayStatus === "installed")
+      ).length,
       needsSync: model.rows.filter((row) => row.canSync).length,
       broken: model.rows.filter((row) =>
         row.cells.some((cell) => cell.displayStatus === "broken")
       ).length,
       external: model.rows.filter((row) =>
         row.cells.some((cell) => cell.status === "orphaned")
-      ).length
+      ).length,
+      custom: model.rows.filter((row) => row.isCustom).length
     }),
     [model.rows]
   );
@@ -75,6 +101,21 @@ export function SkillsBoard({ model }: { model: SkillBoardModel }) {
       setSelectedName(null);
     }
   }, [rows, selectedName]);
+
+  useEffect(() => {
+    if (!activeRow) {
+      return;
+    }
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setSelectedName(null);
+      }
+    }
+
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [activeRow]);
 
   const uiLocked = isPending || busyAction !== null;
 
@@ -90,6 +131,7 @@ export function SkillsBoard({ model }: { model: SkillBoardModel }) {
 
   async function runSync(body: Record<string, unknown>, actionKey: string) {
     setSyncError(null);
+    setInstallResult(null);
     setBusyAction(actionKey);
 
     try {
@@ -108,6 +150,40 @@ export function SkillsBoard({ model }: { model: SkillBoardModel }) {
       refreshBoard();
     } catch (error) {
       setSyncError(error instanceof Error ? error.message : "同步失败。");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
+  async function installSourceSkills() {
+    const source = installSource.trim();
+    if (!source) {
+      return;
+    }
+
+    setSyncError(null);
+    setInstallResult(null);
+    setBusyAction("install-source");
+
+    try {
+      const response = await fetch("/api/skills/install", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ source })
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(data.error ?? `安装失败：${response.status}`);
+      }
+
+      setInstallResult(data as InstallResult);
+      setInstallSource("");
+      refreshBoard();
+    } catch (error) {
+      setSyncError(error instanceof Error ? error.message : "安装失败。");
     } finally {
       setBusyAction(null);
     }
@@ -209,18 +285,112 @@ export function SkillsBoard({ model }: { model: SkillBoardModel }) {
 
   const allVisibleSelected =
     rows.length > 0 && rows.every((row) => selectedNames.includes(row.name));
+  const boardMetrics = [
+    {
+      label: "全部技能",
+      value: counts.all,
+      detail: "工具目录",
+      icon: CheckCircle2,
+      tone: "neutral"
+    },
+    {
+      label: "待同步",
+      value: counts.needsSync,
+      detail: "缺失项",
+      icon: HardDriveDownload,
+      tone: counts.needsSync > 0 ? "warning" : "success"
+    },
+    {
+      label: "异常",
+      value: counts.broken,
+      detail: "异常项",
+      icon: AlertTriangle,
+      tone: counts.broken > 0 ? "danger" : "success"
+    },
+    {
+      label: "自制",
+      value: counts.custom,
+      detail: "自制条目",
+      icon: Tag,
+      tone: "custom"
+    }
+  ];
 
   return (
     <section className="board-shell board-shell-grid">
-      <div className="workspace-toolbar workspace-toolbar-main">
-        <div className="workspace-toolbar-copy">
-          <p className="eyebrow">Resource List</p>
-          <h2 className="sidebar-title">{rows.length} 个条目</h2>
-          <p className="toolbar-meta">
-            {model.rows.length} 个技能 · {model.agents.length} 个工具 · {model.pendingSyncCount} 个缺失项
-          </p>
+      <div className="board-command-center workspace-toolbar-main">
+        <div className="board-command-top">
+          <div className="workspace-toolbar-copy">
+            <p className="eyebrow">Resource List</p>
+            <h2 className="sidebar-title">{rows.length} 个条目正在显示</h2>
+            <p className="toolbar-meta">
+              搜索、筛选和同步都在同一处完成；详情只在需要检查路径和 SKILL.md 时打开。
+            </p>
+          </div>
+          <div className="table-summary board-selection-summary">
+            <span className="meta-chip">已选 {selectedNames.length} 项</span>
+            <span className="meta-chip">可同步 {syncableSelectedNames.length} 项</span>
+          </div>
         </div>
-        <div className="workspace-toolbar-actions">
+
+        <div className="board-status-strip" aria-label="技能状态概览">
+          {boardMetrics.map((item) => {
+            const Icon = item.icon;
+            return (
+              <div key={item.label} className="board-strip-item" data-tone={item.tone}>
+                <span className="board-strip-icon">
+                  <Icon size={16} />
+                </span>
+                <span className="board-strip-copy">
+                  <span>{item.label}</span>
+                  <strong>{item.value}</strong>
+                  <small>{item.detail}</small>
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        <form
+          className="install-source-panel"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void installSourceSkills();
+          }}
+        >
+          <label className="install-source-input">
+            <PackagePlus size={16} />
+            <input
+              value={installSource}
+              onChange={(event) => setInstallSource(event.target.value)}
+              placeholder="GitHub skill 地址或本地目录"
+              disabled={uiLocked}
+            />
+          </label>
+          <button
+            type="submit"
+            className="primary-button"
+            disabled={uiLocked || installSource.trim().length === 0}
+          >
+            {isActionBusy("install-source") ? (
+              <LoaderCircle size={16} className="spin" />
+            ) : (
+              <PackagePlus size={16} />
+            )}
+            {isActionBusy("install-source") ? "安装中..." : "安装 skill"}
+          </button>
+        </form>
+
+        {installResult ? (
+          <div className="install-result" role="status">
+            <strong>{installResult.discovered.map((skill) => skill.name).join("、")}</strong>
+            <span>已安装 {installResult.completed.length}</span>
+            <span>跳过 {installResult.skipped.length}</span>
+            <span>失败 {installResult.failed.length}</span>
+          </div>
+        ) : null}
+
+        <div className="workspace-toolbar-actions board-control-row">
           <div className="inline-filter-group" aria-label="资源范围">
             <button
               type="button"
@@ -270,7 +440,7 @@ export function SkillsBoard({ model }: { model: SkillBoardModel }) {
           </label>
           <button
             type="button"
-            className="table-button"
+            className="table-button table-button-select"
             onClick={toggleVisibleSelection}
             disabled={uiLocked || rows.length === 0}
           >
@@ -303,7 +473,12 @@ export function SkillsBoard({ model }: { model: SkillBoardModel }) {
         </div>
       </div>
 
-      {syncError ? <p className="card-copy board-error">{syncError}</p> : null}
+      {syncError ? (
+        <p className="card-copy board-error" role="alert">
+          <TriangleAlert size={16} />
+          {syncError}
+        </p>
+      ) : null}
 
       <section className="table-panel board-list-panel">
         <div className="sidebar-head">
@@ -312,8 +487,8 @@ export function SkillsBoard({ model }: { model: SkillBoardModel }) {
             <h2 className="sidebar-title">紧凑视图</h2>
           </div>
           <div className="table-summary">
-            <span className="meta-chip">已选 {selectedNames.length} 项</span>
-            <span className="meta-chip">工具数 {model.agents.length}</span>
+            <span className="meta-chip">匹配 {rows.length} 项</span>
+            <span className="meta-chip">外部 {counts.external} 项</span>
           </div>
         </div>
 
@@ -340,7 +515,7 @@ export function SkillsBoard({ model }: { model: SkillBoardModel }) {
             <tbody>
               {rows.map((row) => (
                 <tr
-                  key={row.name}
+                  key={`${row.sourcePath}:${row.name}`}
                   data-selected={activeRow?.name === row.name}
                   onClick={() => setSelectedName(row.name)}
                 >
@@ -352,7 +527,7 @@ export function SkillsBoard({ model }: { model: SkillBoardModel }) {
                       onChange={() => toggleSelection(row.name)}
                     />
                   </td>
-                  <td>
+                  <td data-label="技能">
                     <div className="table-skill-name">
                       {row.name}
                       {row.isCustom && (
@@ -364,18 +539,18 @@ export function SkillsBoard({ model }: { model: SkillBoardModel }) {
                     </div>
                   </td>
                   {row.cells.map((cell) => (
-                    <td key={`${row.name}-${cell.agentId}`}>
+                    <td key={`${row.name}-${cell.agentId}`} data-label={cell.agentName}>
                       <span className="board-status" data-status={cell.displayStatus}>
                         {displayStatusLabel[cell.displayStatus]}
                       </span>
                     </td>
                   ))}
-                  <td>
+                  <td data-label="缺口">
                     <span className="muted">
                       {row.canSync ? `${row.missingCount} 个` : "0"}
                     </span>
                   </td>
-                  <td>
+                  <td data-label="操作">
                     <div className="table-actions">
                       <button
                         type="button"
@@ -395,49 +570,12 @@ export function SkillsBoard({ model }: { model: SkillBoardModel }) {
                             同步中
                           </>
                         ) : (
-                          "同步"
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        className={row.isCustom ? "table-button table-button-custom-active" : "table-button"}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void toggleCustomTag(row.name, row.isCustom);
-                        }}
-                        disabled={uiLocked}
-                      >
-                        {isActionBusy(`${row.isCustom ? "untag" : "tag"}:${row.name}`) ? (
                           <>
-                            <LoaderCircle size={14} className="spin" />
-                            处理中
+                            <HardDriveDownload size={14} />
+                            同步
                           </>
-                        ) : row.isCustom ? (
-                          "取消自制"
-                        ) : (
-                          "标记自制"
                         )}
                       </button>
-                      {row.cells.some((cell) => cell.exists) ? (
-                        <button
-                          type="button"
-                          className="table-button table-button-danger"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void deleteSkill(row.name);
-                          }}
-                          disabled={uiLocked}
-                        >
-                          {isActionBusy(`delete:${row.name}`) ? (
-                            <>
-                              <LoaderCircle size={14} className="spin" />
-                              删除中
-                            </>
-                          ) : (
-                            "删除"
-                          )}
-                        </button>
-                      ) : null}
                       <button
                         type="button"
                         className="table-button table-button-ghost"
@@ -447,6 +585,7 @@ export function SkillsBoard({ model }: { model: SkillBoardModel }) {
                         }}
                         disabled={uiLocked}
                       >
+                        <Eye size={14} />
                         详情
                       </button>
                     </div>
@@ -488,12 +627,45 @@ export function SkillsBoard({ model }: { model: SkillBoardModel }) {
               <div className="detail-hero-actions">
                 <button
                   type="button"
-                  className="table-button table-button-ghost"
+                  className="table-button table-button-icon"
+                  aria-label="关闭详情"
                   onClick={() => setSelectedName(null)}
                   disabled={uiLocked}
                 >
-                  关闭
+                  <X size={16} />
                 </button>
+                <button
+                  type="button"
+                  className={activeRow.isCustom ? "table-button table-button-custom-active" : "table-button"}
+                  onClick={() => void toggleCustomTag(activeRow.name, activeRow.isCustom)}
+                  disabled={uiLocked}
+                >
+                  {isActionBusy(`${activeRow.isCustom ? "untag" : "tag"}:${activeRow.name}`) ? (
+                    <LoaderCircle size={14} className="spin" />
+                  ) : (
+                    <Tag size={14} />
+                  )}
+                  {isActionBusy(`${activeRow.isCustom ? "untag" : "tag"}:${activeRow.name}`)
+                    ? "处理中..."
+                    : activeRow.isCustom
+                      ? "取消自制"
+                      : "标记自制"}
+                </button>
+                {activeRow.cells.some((cell) => cell.exists) ? (
+                  <button
+                    type="button"
+                    className="table-button table-button-danger"
+                    onClick={() => void deleteSkill(activeRow.name)}
+                    disabled={uiLocked}
+                  >
+                    {isActionBusy(`delete:${activeRow.name}`) ? (
+                      <LoaderCircle size={14} className="spin" />
+                    ) : (
+                      <Trash2 size={14} />
+                    )}
+                    {isActionBusy(`delete:${activeRow.name}`) ? "删除中..." : "删除副本"}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="primary-button"

@@ -24,7 +24,7 @@ export async function scanSourceSkills(
           const metadata = await readSkillFrontmatter(skillFilePath);
           const fileStat = await stat(skillFilePath);
           return {
-            name: metadata.data.name || entry.name,
+            name: entry.name,
             description: metadata.data.description || "未提供描述。",
             sourcePath,
             masterAgentId: "",
