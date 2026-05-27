@@ -60,9 +60,8 @@ export async function applySyncPlan(
         throw new Error(`Source path is outside all managed agent directories: ${action.sourcePath}`);
       }
 
-      if (action.type === "repair_copy") {
-        await rm(action.targetPath, { recursive: true, force: true });
-      }
+      // 复制前先清除目标（类型可能不匹配，如文件 vs 目录）
+      await rm(action.targetPath, { recursive: true, force: true });
 
       await copySkill(action.sourcePath, action.targetPath);
       result.completed.push(action);

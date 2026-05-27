@@ -6,7 +6,13 @@ const workspaceRoot = dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
   typedRoutes: true,
-  outputFileTracingRoot: workspaceRoot
+  outputFileTracingRoot: workspaceRoot,
+  webpack: (config, { dev }) => {
+    if (dev) {
+      config.watchOptions = { poll: 1000, aggregateTimeout: 300 };
+    }
+    return config;
+  }
 };
 
 export default nextConfig;
