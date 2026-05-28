@@ -1,48 +1,15 @@
 "use client";
 
-import { FileStack, FolderTree, LayoutGrid, RadioTower } from "lucide-react";
-
-import { SidebarNav } from "@/src/components/sidebar-nav";
+import { Sidebar } from "@/src/components/ui/sidebar";
+import { ToastProvider } from "@/src/components/ui/toast";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="app-shell">
-      <header className="topbar">
-        <div className="topbar-brand-shell">
-          <div className="brand-mark">
-            <FolderTree size={18} />
-          </div>
-          <div className="topbar-brand">
-            <h1 className="brand-name">Skills Hub</h1>
-            <p className="topbar-copy">本地 skills 与全局规则控制台</p>
-          </div>
-        </div>
-        <div className="topbar-status" aria-label="当前运行模式">
-          <RadioTower size={15} />
-          <span>Local console</span>
-        </div>
-      </header>
-      <div className="content-shell content-shell-wide shell-grid">
-        <aside className="shell-nav">
-          <SidebarNav
-            items={[
-              {
-                href: "/",
-                label: "技能管理",
-                eyebrow: "Skills",
-                icon: LayoutGrid
-              },
-              {
-                href: "/instructions",
-                label: "全局规则",
-                eyebrow: "Global Rules",
-                icon: FileStack
-              }
-            ]}
-          />
-        </aside>
-        <div>{children}</div>
+    <ToastProvider>
+      <div className="app-shell">
+        <Sidebar />
+        <div className="main">{children}</div>
       </div>
-    </div>
+    </ToastProvider>
   );
 }

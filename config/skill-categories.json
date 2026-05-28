@@ -1,0 +1,48 @@
+{
+  "agent-reach": [
+    "cat-search"
+  ],
+  "brainstorming": [
+    "cat-dev-tools"
+  ],
+  "certbot-ssl": [
+    "cat-devops"
+  ],
+  "content-risk-detector": [
+    "cat-content"
+  ],
+  "cover-prompt-generator": [
+    "cat-content"
+  ],
+  "find-skills": [
+    "cat-search"
+  ],
+  "frontend-design": [
+    "cat-dev-tools"
+  ],
+  "humanizer-zh": [
+    "cat-test",
+    "cat-content"
+  ],
+  "last30days": [
+    "cat-search"
+  ],
+  "markitdown": [
+    "cat-dev-tools"
+  ],
+  "serper-scrape": [
+    "cat-search"
+  ],
+  "skill-creator": [
+    "cat-dev-tools"
+  ],
+  "title-generator": [
+    "cat-content"
+  ],
+  "ui-ux-pro-max": [
+    "cat-dev-tools"
+  ],
+  "writing-plans": [
+    "cat-dev-tools"
+  ]
+}

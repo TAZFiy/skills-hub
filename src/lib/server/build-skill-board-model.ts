@@ -2,6 +2,9 @@ import { readFile } from "node:fs/promises";
 
 import { buildOverviewModel } from "@/src/lib/server/build-overview-model";
 import { readCustomSkills } from "@/src/lib/config/custom-skills-store";
+import { readCategories } from "@/src/lib/config/categories-store";
+import { readSkillCategories } from "@/src/lib/config/skill-categories-store";
+import { autoCategorize } from "@/src/lib/skills/auto-categorize";
 import type { SkillBoardCell, SkillBoardModel, SkillBoardRow } from "@/src/types/board";
 import type { InstallStatus } from "@/src/types/skills";
 
@@ -22,7 +25,12 @@ async function readSkillContent(skillFilePath: string) {
 }
 
 export async function buildSkillBoardModel(): Promise<SkillBoardModel> {
-  const [overview, customNames] = await Promise.all([buildOverviewModel(), readCustomSkills()]);
+  const [overview, customNames, categories, skillCatMap] = await Promise.all([
+    buildOverviewModel(),
+    readCustomSkills(),
+    readCategories(),
+    readSkillCategories(),
+  ]);
   const customSet = new Set(customNames);
   const rows: SkillBoardRow[] = await Promise.all(
     overview.registryRows.map(async (row) => {
@@ -41,6 +49,10 @@ export async function buildSkillBoardModel(): Promise<SkillBoardModel> {
         (state) => (state.status === "missing" || state.status === "drifted") && Boolean(state.sourcePath)
       ).length;
 
+      const categoryIds = row.name in skillCatMap
+        ? skillCatMap[row.name]
+        : autoCategorize(row.name, row.description, categories);
+
       return {
         name: row.name,
         description: row.description,
@@ -49,6 +61,7 @@ export async function buildSkillBoardModel(): Promise<SkillBoardModel> {
         skillContent,
         canSync: missingCount > 0,
         missingCount,
+        categoryIds,
         cells,
         raw: row,
         isCustom: customSet.has(row.name)
@@ -59,6 +72,7 @@ export async function buildSkillBoardModel(): Promise<SkillBoardModel> {
   return {
     agents: overview.agents,
     rows,
+    categories,
     pendingSyncCount: rows.reduce((sum, row) => sum + row.missingCount, 0)
   };
 }

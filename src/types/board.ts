@@ -1,5 +1,6 @@
 import type { AgentDefinition } from "@/src/types/agents";
 import type { InstallStatus, RegistryRow } from "@/src/types/skills";
+import type { Category } from "@/src/types/categories";
 
 export type BoardDisplayStatus = "installed" | "missing" | "broken";
 
@@ -22,6 +23,7 @@ export type SkillBoardRow = {
   skillContent: string;
   canSync: boolean;
   missingCount: number;
+  categoryIds: string[];
   cells: SkillBoardCell[];
   raw: RegistryRow;
   isCustom: boolean;
@@ -30,5 +32,6 @@ export type SkillBoardRow = {
 export type SkillBoardModel = {
   agents: AgentDefinition[];
   rows: SkillBoardRow[];
+  categories: Category[];
   pendingSyncCount: number;
 };

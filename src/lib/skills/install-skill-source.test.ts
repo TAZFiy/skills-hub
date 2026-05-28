@@ -5,8 +5,6 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
-  buildGitCloneArgs,
-  buildGitCloneEnv,
   classifySkillInstallSource,
   discoverInstallableSkills,
   installSkillSource
@@ -51,55 +49,16 @@ describe("install skill source", () => {
     expect(classifySkillInstallSource("/tmp/demo-skill")).toBe("local");
   });
 
-  it("can build a git clone environment without proxy variables", () => {
-    const originalHttpsProxy = process.env.HTTPS_PROXY;
-    const originalAllProxy = process.env.ALL_PROXY;
-    const originalNoProxy = process.env.NO_PROXY;
-    process.env.HTTPS_PROXY = "http://proxy.example";
-    process.env.ALL_PROXY = "http://proxy.example";
-    process.env.NO_PROXY = "localhost";
-
-    try {
-      const env = buildGitCloneEnv({ disableProxy: true });
-
-      expect(env.HTTPS_PROXY).toBeUndefined();
-      expect(env.ALL_PROXY).toBeUndefined();
-      expect(env.NO_PROXY).toContain("github.com");
-    } finally {
-      if (originalHttpsProxy === undefined) {
-        delete process.env.HTTPS_PROXY;
-      } else {
-        process.env.HTTPS_PROXY = originalHttpsProxy;
-      }
-
-      if (originalAllProxy === undefined) {
-        delete process.env.ALL_PROXY;
-      } else {
-        process.env.ALL_PROXY = originalAllProxy;
-      }
-
-      if (originalNoProxy === undefined) {
-        delete process.env.NO_PROXY;
-      } else {
-        process.env.NO_PROXY = originalNoProxy;
-      }
-    }
-  });
-
-  it("can force git clone to use HTTP/1.1", () => {
+  it("classifies GitHub tree URLs as git sources", () => {
     expect(
-      buildGitCloneArgs("https://github.com/acme/demo-skill", "/tmp/demo-skill", {
-        httpVersion: "HTTP/1.1"
-      })
-    ).toEqual([
-      "-c",
-      "http.version=HTTP/1.1",
-      "clone",
-      "--depth",
-      "1",
-      "https://github.com/acme/demo-skill",
-      "/tmp/demo-skill"
-    ]);
+      classifySkillInstallSource("https://github.com/mvanhorn/last30days-skill/tree/main/skills/last30days")
+    ).toBe("git");
+    expect(
+      classifySkillInstallSource("https://github.com/acme/demo-skill/tree/dev/sub/path")
+    ).toBe("git");
+    expect(
+      classifySkillInstallSource("https://github.com/acme/demo-skill/tree/main")
+    ).toBe("git");
   });
 
   it("discovers a root skill directory", async () => {

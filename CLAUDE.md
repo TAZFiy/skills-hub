@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 ```bash
-npm run dev          # Start dev server
+npm run dev          # Start dev server (默认 3000)
 npm run dev:reset    # Clear .next cache then start dev server
 npm run build        # Production build
 npm start            # Start production server
@@ -13,6 +13,8 @@ npm run lint         # next lint
 npm test             # vitest run (all tests)
 npx tsc --noEmit     # TypeScript type check
 ```
+
+> **重要：** 开发服务器通过 Docker 在 `http://localhost:5175` 运行。不要手动启动 dev server 或修改端口。
 
 ## Project Overview
 

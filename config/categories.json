@@ -1,0 +1,9 @@
+[
+  { "id": "cat-search", "name": "搜索检索", "icon": "🌐", "desc": "网络搜索、文档检索、信息提取", "color": "oklch(55% 0.12 170)", "order": 0, "isPreset": true, "keywords": ["搜索", "检索", "搜", "scrape", "抓取", "查询", "find", "fetch", "crawl", "web", "search", "serper"] },
+  { "id": "cat-content", "name": "内容生成", "icon": "✨", "desc": "文本、图片、演示文稿等内容创作", "color": "oklch(55% 0.15 300)", "order": 1, "isPreset": true, "keywords": ["生成", "创作", "文案", "标题", "封面", "写作", "ppt", "slide", "演示", "视频", "图片", "图像", "canvas", "design", "内容", "generate", "create", "write", "title", "prompt"] },
+  { "id": "cat-data", "name": "数据分析", "icon": "📊", "desc": "数据探索、统计分析、可视化", "color": "oklch(55% 0.12 80)", "order": 2, "isPreset": true, "keywords": ["数据", "分析", "统计", "可视化", "chart", "data", "excel", "xlsx", "analyze", "报表", "dashboard", "xlsx", "metric"] },
+  { "id": "cat-dev-tools", "name": "开发工具", "icon": "🛠", "desc": "代码生成、重构、开发流程辅助", "color": "oklch(55% 0.12 45)", "order": 3, "isPreset": true, "keywords": ["开发", "代码", "重构", "编程", "tool", "dev", "git", "库", "npm", "sdk", "api", "build", "compile", "cli", "builder", "tool", "utility"] },
+  { "id": "cat-test", "name": "测试质量", "icon": "🧪", "desc": "自动化测试、质量检查、覆盖率", "color": "oklch(55% 0.12 145)", "order": 4, "isPreset": true, "keywords": ["测试", "质检", "检测", "覆盖率", "test", "lint", "qa", "verify", "unit", "e2e", "assert", "coverage", "bug", "defect"] },
+  { "id": "cat-devops", "name": "部署运维", "icon": "🚀", "desc": "CI/CD、部署管理、运行监控", "color": "oklch(55% 0.12 220)", "order": 5, "isPreset": true, "keywords": ["部署", "运维", "ci", "cd", "发布", "监控", "证书", "ssl", "certbot", "cert", "https", "docker", "k8s", "kubernetes", "deploy", "install"] },
+  { "id": "cat-code-review", "name": "代码审查", "icon": "🔍", "desc": "代码差异审查、逻辑缺陷检测、安全审计", "color": "oklch(55% 0.15 240)", "order": 6, "isPreset": true, "keywords": ["审查", "审计", "review", "安全", "漏洞", "security", "风险", "defect", "合规", "compliance"] }
+]

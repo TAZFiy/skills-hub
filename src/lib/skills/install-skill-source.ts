@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { cp, mkdir, mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
+import { Readable } from "node:stream";
 
 import type { AgentDefinition } from "@/src/types/agents";
 
@@ -43,29 +44,145 @@ type PreparedSource = {
   cleanupPath: string | null;
 };
 
-const PROXY_ENV_KEYS = [
-  "HTTP_PROXY",
-  "HTTPS_PROXY",
-  "ALL_PROXY",
-  "http_proxy",
-  "https_proxy",
-  "all_proxy"
-] as const;
-const GIT_CLONE_TIMEOUT_MS = 180_000;
+const GITHUB_DOWNLOAD_TIMEOUT_MS = 180_000;
+
+/* ============================================================
+   GitHub URL parsing & HTTPS download
+   ============================================================ */
+
+type GitHubRepo = {
+  owner: string;
+  repo: string;
+  branch?: string;
+  subdirectory?: string;
+};
+
+function parseGitHubRepo(source: string): GitHubRepo | null {
+  // https://github.com/owner/repo/tree/branch/sub/dir
+  const treeWithPath = source.match(
+    /^https:\/\/github\.com\/([^/\s]+)\/([^/\s]+?)\/tree\/([^/]+)\/(.+)$/i
+  );
+  if (treeWithPath) {
+    return {
+      owner: treeWithPath[1],
+      repo: treeWithPath[2].replace(/\.git$/, ""),
+      branch: treeWithPath[3],
+      subdirectory: treeWithPath[4],
+    };
+  }
+
+  // https://github.com/owner/repo/tree/branch
+  const treeRoot = source.match(
+    /^https:\/\/github\.com\/([^/\s]+)\/([^/\s]+?)\/tree\/([^/\s]+?)(?:\/)?$/i
+  );
+  if (treeRoot) {
+    return {
+      owner: treeRoot[1],
+      repo: treeRoot[2].replace(/\.git$/, ""),
+      branch: treeRoot[3],
+    };
+  }
+
+  // https://github.com/owner/repo[.git]
+  const https = source.match(
+    /^https:\/\/github\.com\/([^/\s]+)\/([^/\s]+?)(?:\.git)?(?:\/)?$/i
+  );
+  if (https) return { owner: https[1], repo: https[2] };
+
+  // git@github.com:owner/repo[.git]
+  const ssh = source.match(
+    /^git@github\.com:([^/\s]+)\/([^/\s]+?)(?:\.git)?$/i
+  );
+  if (ssh) return { owner: ssh[1], repo: ssh[2] };
+
+  return null;
+}
+
+function extractTarGz(response: Response, targetPath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const tar = spawn("tar", [
+      "-xzf", "-", "-C", targetPath, "--strip-components=1",
+    ], { stdio: ["pipe", "inherit", "inherit"] });
+
+    if (!response.body) {
+      reject(new Error("响应体为空"));
+      return;
+    }
+
+    Readable.fromWeb(response.body as any).pipe(tar.stdin);
+
+    tar.on("close", (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`解压失败，tar 退出码: ${code}`));
+    });
+    tar.on("error", (err) => {
+      if (err.message.includes("spawn tar ENOENT")) {
+        reject(new Error("找不到 tar 命令，请确保系统已安装 tar。"));
+      } else {
+        reject(err);
+      }
+    });
+  });
+}
+
+async function downloadGitHubArchive(
+  repo: GitHubRepo,
+  tempDir: string,
+): Promise<string> {
+  const branches = repo.branch ? [repo.branch, "main", "master"] : ["main", "master"];
+  let lastError: Error | null = null;
+
+  for (const branch of [...new Set(branches)]) {
+    const url = `https://github.com/${repo.owner}/${repo.repo}/archive/refs/heads/${branch}.tar.gz`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), GITHUB_DOWNLOAD_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(url, {
+        signal: controller.signal,
+        redirect: "follow",
+        headers: { "User-Agent": "skills-hub/1.0" },
+      });
+
+      clearTimeout(timeout);
+
+      if (response.status === 404) {
+        lastError = new Error(`仓库 ${repo.owner}/${repo.repo} 没有 ${branch} 分支`);
+        continue;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          `下载失败 (HTTP ${response.status})，请检查仓库地址或网络连接。`
+        );
+      }
+
+      const clonePath = join(tempDir, repo.repo);
+      await mkdir(clonePath, { recursive: true });
+      await extractTarGz(response, clonePath);
+      return clonePath;
+    } catch (err) {
+      clearTimeout(timeout);
+      if (err instanceof Error && err.name === "AbortError") {
+        throw new Error("下载超时，请检查网络或稍后重试。");
+      }
+      throw err;
+    }
+  }
+
+  throw lastError ?? new Error(`无法从 ${repo.owner}/${repo.repo} 下载 archive`);
+}
+
+/* ============================================================
+   Source classification
+   ============================================================ */
 
 function normalizeSource(input: string): string {
   return input.trim();
 }
 
 export function classifySkillInstallSource(source: string): SkillInstallSourceKind {
-  if (
-    /^https:\/\/github\.com\/[^/\s]+\/[^/\s]+(?:\.git)?(?:\/)?$/i.test(source) ||
-    /^git@github\.com:[^/\s]+\/[^/\s]+(?:\.git)?$/i.test(source)
-  ) {
-    return "git";
-  }
-
-  return "local";
+  return parseGitHubRepo(source) ? "git" : "local";
 }
 
 function expandLocalPath(source: string): string {
@@ -80,144 +197,9 @@ function expandLocalPath(source: string): string {
   return resolve(source);
 }
 
-function gitSourceDirectoryName(source: string): string {
-  const withoutSuffix = source.replace(/\/$/, "").replace(/\.git$/, "");
-  const name = withoutSuffix.split(/[/:]/).at(-1)?.trim();
-
-  if (!name) {
-    throw new Error("无法从 GitHub 地址识别仓库名称。");
-  }
-
-  return name;
-}
-
-export function buildGitCloneEnv(options: { disableProxy?: boolean } = {}) {
-  if (!options.disableProxy) {
-    return process.env;
-  }
-
-  const env = { ...process.env };
-  for (const key of PROXY_ENV_KEYS) {
-    delete env[key];
-  }
-
-  env.NO_PROXY = env.NO_PROXY ? `${env.NO_PROXY},github.com` : "github.com";
-  env.no_proxy = env.no_proxy ? `${env.no_proxy},github.com` : "github.com";
-
-  return env;
-}
-
-export function buildGitCloneArgs(
-  source: string,
-  targetPath: string,
-  options: { httpVersion?: "HTTP/1.1" } = {}
-) {
-  const args = ["clone", "--depth", "1", source, targetPath];
-  if (options.httpVersion) {
-    return ["-c", `http.version=${options.httpVersion}`, ...args];
-  }
-
-  return args;
-}
-
-function isProxyCloneError(error: Error): boolean {
-  return /CONNECT tunnel failed|response 501|proxy|Proxy/i.test(error.message);
-}
-
-function isHttp2CloneError(error: Error): boolean {
-  return /HTTP2 framing layer|HTTP\/2|http2/i.test(error.message);
-}
-
-function runGitCloneOnce(
-  source: string,
-  targetPath: string,
-  options: { disableProxy?: boolean; httpVersion?: "HTTP/1.1" } = {}
-): Promise<void> {
-  return new Promise((resolvePromise, reject) => {
-    const child = spawn("git", buildGitCloneArgs(source, targetPath, options), {
-      env: buildGitCloneEnv(options),
-      stdio: ["ignore", "pipe", "pipe"]
-    });
-    const stderr: Buffer[] = [];
-    let didTimeout = false;
-    const timeout = setTimeout(() => {
-      didTimeout = true;
-      child.kill("SIGTERM");
-    }, GIT_CLONE_TIMEOUT_MS);
-
-    child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
-    child.on("error", (error) => {
-      clearTimeout(timeout);
-      reject(error);
-    });
-    child.on("close", (code) => {
-      clearTimeout(timeout);
-      if (didTimeout) {
-        reject(new Error("git clone 超时，请检查网络或稍后重试。"));
-        return;
-      }
-
-      if (code === 0) {
-        resolvePromise();
-        return;
-      }
-
-      reject(
-        new Error(
-          Buffer.concat(stderr).toString("utf8").trim() ||
-            `git clone failed with exit code ${code ?? "unknown"}`
-        )
-      );
-    });
-  });
-}
-
-async function runGitClone(source: string, targetPath: string): Promise<void> {
-  const attempts: Array<{
-    disableProxy?: boolean;
-    httpVersion?: "HTTP/1.1";
-    shouldRun: (error: Error) => boolean;
-  }> = [
-    {
-      disableProxy: true,
-      shouldRun: (error) => isProxyCloneError(error) || isHttp2CloneError(error)
-    },
-    {
-      disableProxy: true,
-      httpVersion: "HTTP/1.1",
-      shouldRun: (error) => isProxyCloneError(error) || isHttp2CloneError(error)
-    }
-  ];
-
-  try {
-    await runGitCloneOnce(source, targetPath);
-  } catch (error) {
-    if (!(error instanceof Error)) {
-      throw error;
-    }
-
-    let lastError = error;
-    for (const attempt of attempts) {
-      if (!attempt.shouldRun(lastError)) {
-        continue;
-      }
-
-      try {
-        await rm(targetPath, { recursive: true, force: true });
-        await runGitCloneOnce(source, targetPath, attempt);
-        return;
-      } catch (nextError) {
-        if (nextError instanceof Error) {
-          lastError = nextError;
-          continue;
-        }
-        throw nextError;
-      }
-    }
-
-    throw lastError;
-  }
-}
+/* ============================================================
+   Source preparation (download or local)
+   ============================================================ */
 
 async function pathExists(path: string): Promise<boolean> {
   try {
@@ -252,15 +234,27 @@ async function prepareSource(source: string): Promise<PreparedSource> {
   }
 
   const tempRoot = await mkdtemp(join(tmpdir(), "skills-hub-install-"));
-  const clonePath = join(tempRoot, gitSourceDirectoryName(source));
+  const repo = parseGitHubRepo(source);
+
+  if (!repo) {
+    throw new Error("无效的 GitHub 仓库地址。");
+  }
+
   try {
-    await runGitClone(source, clonePath);
-    return { kind, path: clonePath, cleanupPath: tempRoot };
+    const extractPath = await downloadGitHubArchive(repo, tempRoot);
+    const sourcePath = repo.subdirectory
+      ? join(extractPath, repo.subdirectory)
+      : extractPath;
+    return { kind, path: sourcePath, cleanupPath: tempRoot };
   } catch (error) {
     await rm(tempRoot, { recursive: true, force: true });
     throw error;
   }
 }
+
+/* ============================================================
+   Skill discovery
+   ============================================================ */
 
 export async function discoverInstallableSkills(
   sourcePath: string
@@ -295,6 +289,10 @@ export async function discoverInstallableSkills(
 
   return skills.filter((skill): skill is DiscoveredInstallSkill => skill !== null);
 }
+
+/* ============================================================
+   Main entry: install a skill source to agents
+   ============================================================ */
 
 export async function installSkillSource(
   rawSource: string,
