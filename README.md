@@ -7,12 +7,16 @@
 - `SKILL.md` 内容
 - Claude / Codex 的全局规则文件
 
-当前版本重点是“少跳转、少解释、直接操作”：
+当前版本重点是”少跳转、少解释、直接操作”：
 
-- 首页可以直接同步 skill、标记自制、删除安装副本
+- 首页可以直接同步 skill、标记自制、删除安装副本、编辑分类
 - 全局规则页只编辑两个现有文件：
   - `~/.claude/CLAUDE.md`
   - `~/.codex/AGENTS.md`
+
+## 截图
+
+![Dashboard](screenshots/dashboard.png)
 
 ## 功能概览
 
