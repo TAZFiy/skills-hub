@@ -561,9 +561,9 @@ textarea {
   color: var(--fg);
 }
 .category-chip.active {
-  background: var(--fg);
+  background: var(--accent);
   color: #fff;
-  border-color: var(--fg);
+  border-color: var(--accent);
 }
 .category-chip-count {
   font-size: 10px;
