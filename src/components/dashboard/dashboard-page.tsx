@@ -81,7 +81,9 @@ export function DashboardPage({ model }: { model: SkillBoardModel }) {
   const rows = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return model.rows.filter((row) => {
-      if (selectedCategory && !row.categoryIds.includes(selectedCategory)) return false;
+      if (selectedCategory === "__custom" && !row.isCustom) return false;
+      if (selectedCategory === "__opensource" && row.isCustom) return false;
+      if (selectedCategory && selectedCategory !== "__custom" && selectedCategory !== "__opensource" && !row.categoryIds.includes(selectedCategory)) return false;
       if (filterMode === "needs_sync" && !row.canSync) return false;
       if (filterMode === "broken" && !row.cells.some((c) => c.displayStatus === "broken")) {
         return false;
@@ -331,6 +333,22 @@ export function DashboardPage({ model }: { model: SkillBoardModel }) {
             onClick={() => setSelectedCategory(null)}
           >
             全部分类
+          </div>
+          <div
+            className={"category-chip" + (selectedCategory === "__custom" ? " active" : "")}
+            onClick={() => setSelectedCategory(selectedCategory === "__custom" ? null : "__custom")}
+            style={selectedCategory === "__custom" ? { background: "var(--warm)", borderColor: "var(--warm)" } : undefined}
+          >
+            🏠 自研{" "}
+            <span className="category-chip-count">{model.rows.filter((r) => r.isCustom).length}</span>
+          </div>
+          <div
+            className={"category-chip" + (selectedCategory === "__opensource" ? " active" : "")}
+            onClick={() => setSelectedCategory(selectedCategory === "__opensource" ? null : "__opensource")}
+            style={selectedCategory === "__opensource" ? { background: "var(--good)", borderColor: "var(--good)" } : undefined}
+          >
+            📖 开源{" "}
+            <span className="category-chip-count">{model.rows.filter((r) => !r.isCustom).length}</span>
           </div>
           {model.categories.map((cat) => {
             const count = model.rows.filter((r) => r.categoryIds.includes(cat.id)).length;
