@@ -64,7 +64,7 @@ export function SettingsPage() {
     try {
       const res = await fetch("/api/categories");
       if (res.ok) {
-        setCategories(await res.json());
+        setCategories((await res.json()) as Category[]);
       }
     } catch {
       // ignore
@@ -134,17 +134,21 @@ export function SettingsPage() {
 
   async function handleRestoreDefaults() {
     try {
-      // Delete all, then add presets
-      for (const cat of categories) {
-        await fetch(`/api/categories?id=${cat.id}`, { method: "DELETE" });
-      }
-      for (const preset of DEFAULT_PRESETS) {
-        await fetch("/api/categories", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(preset),
-        });
-      }
+      // Delete all in parallel, then add presets in parallel
+      await Promise.all(
+        categories.map((cat) =>
+          fetch(`/api/categories?id=${cat.id}`, { method: "DELETE" })
+        )
+      );
+      await Promise.all(
+        DEFAULT_PRESETS.map((preset) =>
+          fetch("/api/categories", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(preset),
+          })
+        )
+      );
       await loadCategories();
       setShowRestoreConfirm(false);
       addToast("已恢复预设分类");

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, FileText, LoaderCircle, Save } from "lucide-react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
@@ -106,16 +106,19 @@ export function EditorPage() {
   }
 
   // Cmd+S
+  const handleSaveRef = useRef(handleSave);
+  handleSaveRef.current = handleSave;
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
-        handleSave();
+        handleSaveRef.current();
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  });
+  }, []);
 
   const lineCount = draft.split("\n").length;
 

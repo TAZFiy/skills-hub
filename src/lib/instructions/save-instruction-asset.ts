@@ -1,6 +1,6 @@
 import { lstat, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve, sep } from "node:path";
 
 import { hashInstructionContent } from "@/src/lib/instructions/hash-instruction-content";
 
@@ -36,8 +36,6 @@ async function readContent(path: string) {
     return null;
   }
 }
-
-import { sep } from "node:path";
 
 function ensurePathInside(realRoot: string, realCandidate: string) {
   // 两个参数必须已经通过 realpath 展开，此函数只做字符串比较

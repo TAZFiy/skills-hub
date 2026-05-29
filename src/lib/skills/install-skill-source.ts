@@ -3,6 +3,7 @@ import { cp, mkdir, mkdtemp, readdir, rm, stat } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { Readable } from "node:stream";
+import { ReadableStream as NodeReadableStream } from "node:stream/web";
 
 import type { AgentDefinition } from "@/src/types/agents";
 
@@ -98,6 +99,24 @@ function parseGitHubRepo(source: string): GitHubRepo | null {
   return null;
 }
 
+async function validateExtractedPaths(targetPath: string): Promise<void> {
+  const resolvedTarget = resolve(targetPath);
+  const walk = async (dirPath: string): Promise<void> => {
+    const entries = await readdir(dirPath, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = join(dirPath, entry.name);
+      const resolved = resolve(fullPath);
+      if (!resolved.startsWith(resolvedTarget + "/") && resolved !== resolvedTarget) {
+        throw new Error(`检测到路径遍历攻击: ${resolved}`);
+      }
+      if (entry.isDirectory()) {
+        await walk(fullPath);
+      }
+    }
+  };
+  await walk(resolvedTarget);
+}
+
 function extractTarGz(response: Response, targetPath: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const tar = spawn("tar", [
@@ -109,11 +128,19 @@ function extractTarGz(response: Response, targetPath: string): Promise<void> {
       return;
     }
 
-    Readable.fromWeb(response.body as any).pipe(tar.stdin);
+    Readable.fromWeb(response.body as NodeReadableStream).pipe(tar.stdin);
 
-    tar.on("close", (code) => {
-      if (code === 0) resolve();
-      else reject(new Error(`解压失败，tar 退出码: ${code}`));
+    tar.on("close", async (code) => {
+      if (code !== 0) {
+        reject(new Error(`解压失败，tar 退出码: ${code}`));
+        return;
+      }
+      try {
+        await validateExtractedPaths(targetPath);
+        resolve();
+      } catch (err) {
+        reject(err);
+      }
     });
     tar.on("error", (err) => {
       if (err.message.includes("spawn tar ENOENT")) {
@@ -242,9 +269,21 @@ async function prepareSource(source: string): Promise<PreparedSource> {
 
   try {
     const extractPath = await downloadGitHubArchive(repo, tempRoot);
-    const sourcePath = repo.subdirectory
-      ? join(extractPath, repo.subdirectory)
-      : extractPath;
+    let sourcePath: string;
+    if (repo.subdirectory) {
+      if (repo.subdirectory.includes("..") || repo.subdirectory.startsWith("/")) {
+        throw new Error("Invalid subdirectory path");
+      }
+      const joined = join(extractPath, repo.subdirectory);
+      const resolved = resolve(joined);
+      const resolvedExtract = resolve(extractPath);
+      if (!resolved.startsWith(resolvedExtract + "/") && resolved !== resolvedExtract) {
+        throw new Error("Subdirectory path resolves outside extraction directory");
+      }
+      sourcePath = resolved;
+    } else {
+      sourcePath = extractPath;
+    }
     return { kind, path: sourcePath, cleanupPath: tempRoot };
   } catch (error) {
     await rm(tempRoot, { recursive: true, force: true });

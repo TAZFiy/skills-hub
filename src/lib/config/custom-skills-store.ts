@@ -6,7 +6,7 @@ const STORE_PATH = join(process.cwd(), "config", "custom-skills.json");
 export async function readCustomSkills(): Promise<string[]> {
   try {
     const raw = await readFile(STORE_PATH, "utf8");
-    const parsed = JSON.parse(raw);
+    const parsed: unknown = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];

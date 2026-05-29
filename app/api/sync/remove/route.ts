@@ -1,4 +1,5 @@
 import { rm } from "node:fs/promises";
+import path from "node:path";
 
 import { NextResponse } from "next/server";
 
@@ -13,10 +14,21 @@ export async function DELETE(request: Request) {
   }
 
   const model = await buildOverviewModel();
-  const installedPaths = Object.values(model.agentStates)
-    .flat()
-    .filter((s) => s.skillName === skillName && s.exists)
-    .map((s) => s.targetPath);
+  const agentById = new Map(model.agents.map((a) => [a.id, a]));
+
+  const installedPaths: string[] = [];
+  for (const state of Object.values(model.agentStates).flat()) {
+    if (state.skillName === skillName && state.exists) {
+      const resolvedTarget = path.resolve(state.targetPath);
+      const agent = agentById.get(state.agentId);
+      if (!agent) continue;
+      const resolvedRoot = path.resolve(agent.skillsPath);
+      if (!resolvedTarget.startsWith(resolvedRoot + path.sep)) {
+        throw new Error(`Path traversal detected: ${state.targetPath}`);
+      }
+      installedPaths.push(resolvedTarget);
+    }
+  }
 
   if (installedPaths.length === 0) {
     return NextResponse.json({ ok: false, error: "Skill is not installed in any agent" }, { status: 404 });

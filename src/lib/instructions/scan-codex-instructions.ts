@@ -1,17 +1,9 @@
-import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { hashInstructionContent } from "@/src/lib/instructions/hash-instruction-content";
+import { readPreview } from "@/src/lib/instructions/read-preview";
 import type { InstructionAsset, InstructionSurface } from "@/src/types/instructions";
-
-async function readPreview(path: string) {
-  try {
-    return await readFile(path, "utf8");
-  } catch {
-    return null;
-  }
-}
 
 export async function scanCodexInstructions(
   codexRootDir: string = process.env.CODEX_HOME || join(homedir(), ".codex")

@@ -10,7 +10,6 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import {
-  AlertTriangle,
   ArrowUp,
   ChevronRight,
   Grid3X3,
@@ -37,12 +36,30 @@ import { AgentIcon } from "@/src/components/ui/agent-icon";
 
 type ViewMode = "card" | "list";
 type FilterMode = "all" | "needs_sync" | "broken";
+type SyncRequestBody = { skillName: string | null; types: string[] };
 
 type InstallResult = {
   discovered: Array<{ name: string }>;
-  completed: unknown[];
-  skipped: unknown[];
-  failed: unknown[];
+  completed: Array<{
+    skillName: string;
+    agentId: string;
+    agentName: string;
+    targetPath: string;
+  }>;
+  skipped: Array<{
+    skillName: string;
+    agentId: string;
+    agentName: string;
+    targetPath: string;
+    reason: string;
+  }>;
+  failed: Array<{
+    skillName: string;
+    agentId: string;
+    agentName: string;
+    targetPath: string;
+    error: string;
+  }>;
 };
 
 /* ============================================================
@@ -112,7 +129,7 @@ export function DashboardPage({ model }: { model: SkillBoardModel }) {
   }, [model.rows]);
 
   // ---- API calls ----
-  async function runSync(body: Record<string, unknown>, key: string) {
+  async function runSync(body: SyncRequestBody, key: string) {
     setSyncError(null);
     setInstallResult(null);
     setBusyAction(key);
@@ -144,8 +161,8 @@ export function DashboardPage({ model }: { model: SkillBoardModel }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ source }),
       });
-      const data = (await res.json()) as InstallResult;
-      if (!res.ok) throw new Error((data as unknown as { error?: string }).error ?? `安装失败：${res.status}`);
+      const data: InstallResult & { error?: string } = await res.json();
+      if (!res.ok) throw new Error(data.error ?? `安装失败：${res.status}`);
       setInstallResult(data);
       setInstallSource("");
       setShowInstallModal(false);
@@ -327,44 +344,11 @@ export function DashboardPage({ model }: { model: SkillBoardModel }) {
         </div>
 
         {/* Category filter */}
-        <div className="category-filter" style={{ marginTop: -12, marginBottom: 16 }}>
-          <div
-            className={"category-chip" + (selectedCategory === null ? " active" : "")}
-            onClick={() => setSelectedCategory(null)}
-          >
-            全部分类
-          </div>
-          <div
-            className={"category-chip" + (selectedCategory === "__custom" ? " active" : "")}
-            onClick={() => setSelectedCategory(selectedCategory === "__custom" ? null : "__custom")}
-            style={selectedCategory === "__custom" ? { background: "var(--warm)", borderColor: "var(--warm)" } : undefined}
-          >
-            🏠 自研{" "}
-            <span className="category-chip-count">{model.rows.filter((r) => r.isCustom).length}</span>
-          </div>
-          <div
-            className={"category-chip" + (selectedCategory === "__opensource" ? " active" : "")}
-            onClick={() => setSelectedCategory(selectedCategory === "__opensource" ? null : "__opensource")}
-            style={selectedCategory === "__opensource" ? { background: "var(--good)", borderColor: "var(--good)" } : undefined}
-          >
-            📖 开源{" "}
-            <span className="category-chip-count">{model.rows.filter((r) => !r.isCustom).length}</span>
-          </div>
-          {model.categories.map((cat) => {
-            const count = model.rows.filter((r) => r.categoryIds.includes(cat.id)).length;
-            return (
-              <div
-                key={cat.id}
-                className={"category-chip" + (selectedCategory === cat.id ? " active" : "")}
-                onClick={() => setSelectedCategory(selectedCategory === cat.id ? null : cat.id)}
-                style={selectedCategory === cat.id ? { background: cat.color, borderColor: cat.color } : undefined}
-              >
-                {cat.icon} {cat.name}{" "}
-                <span className="category-chip-count">{count}</span>
-              </div>
-            );
-          })}
-        </div>
+        <CategoryFilterBar
+          model={model}
+          selectedCategory={selectedCategory}
+          onCategoryChange={setSelectedCategory}
+        />
 
         {/* Section header */}
         <div className="section-header">
@@ -442,275 +426,64 @@ export function DashboardPage({ model }: { model: SkillBoardModel }) {
 
       {/* Install modal */}
       {showInstallModal && (
-        <div className="modal-overlay" onClick={() => { setShowInstallModal(false); setInstallSource(""); }}>
-          <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-title">通过链接安装 Skill</div>
-            <div className="modal-desc">粘贴 GitHub 或市场链接，自动安装对应的 Skill</div>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                handleInstall();
-              }}
-            >
-              <input
-                className="modal-input"
-                type="text"
-                placeholder="https://github.com/xxx/skill-repo"
-                value={installSource}
-                onChange={(e) => setInstallSource(e.target.value)}
-                autoFocus
-              />
-              <div className="modal-actions">
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  onClick={() => { setShowInstallModal(false); setInstallSource(""); }}
-                >
-                  取消
-                </button>
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  disabled={uiLocked || !installSource.trim()}
-                >
-                  {isBusy("install") ? "安装中……" : "安装"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <InstallModal
+          installSource={installSource}
+          uiLocked={uiLocked}
+          isInstalling={isBusy("install")}
+          onClose={() => { setShowInstallModal(false); setInstallSource(""); }}
+          onSourceChange={setInstallSource}
+          onInstall={handleInstall}
+        />
       )}
 
       {/* Skill detail drawer */}
       {filteredSkill && (
-        <div className="detail-overlay" onClick={() => setSelectedSkill(null)}>
-          <div className="detail-drawer" onClick={(e) => e.stopPropagation()}>
-            {/* Close button */}
-            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
-              <button className="btn-icon-sm" onClick={() => setSelectedSkill(null)}>
-                <X size={14} />
-              </button>
-            </div>
-
-            {/* Hero */}
-            <div className="detail-hero">
-              <div className="detail-hero-icon">
-                {filteredSkill.name.charAt(0).toUpperCase()}
-              </div>
-              <div className="detail-hero-info">
-                <div className="detail-hero-name">
-                  {filteredSkill.name}
-                  {filteredSkill.isCustom ? (
-                    <Badge variant="self">自研</Badge>
-                  ) : (
-                    <Badge variant="opensource">开源</Badge>
-                  )}
-                </div>
-                <div className="detail-hero-desc">{filteredSkill.description}</div>
-              </div>
-              <div className="detail-hero-actions">
-                <button
-                  className="btn btn-sm btn-outline"
-                  onClick={() => handleToggleCustom(filteredSkill.name, filteredSkill.isCustom)}
-                  disabled={uiLocked}
-                >
-                  {isBusy(`tag:${filteredSkill.name}`) ? (
-                    <LoaderCircle size={12} className="spin" />
-                  ) : (
-                    <Tag size={12} />
-                  )}
-                  {filteredSkill.isCustom ? "取消自研" : "标记自研"}
-                </button>
-                <button
-                  className="btn btn-sm btn-primary"
-                  onClick={() =>
-                    runSync(
-                      { skillName: filteredSkill.name, types: ["create_copy", "repair_copy"] },
-                      `sync:${filteredSkill.name}`
-                    )
-                  }
-                  disabled={uiLocked || !filteredSkill.canSync}
-                >
-                  {isBusy(`sync:${filteredSkill.name}`) ? (
-                    <LoaderCircle size={12} className="spin" />
-                  ) : (
-                    <HardDriveDownload size={12} />
-                  )}
-                  同步
-                </button>
-              </div>
-            </div>
-
-            {/* Source */}
-            <div className="detail-card">
-              <div className="detail-card-label">源文件</div>
-              <div className="detail-card-content" style={{ fontFamily: "var(--font-mono)", fontSize: 12, wordBreak: "break-all" }}>
-                {filteredSkill.skillFilePath}
-              </div>
-            </div>
-
-            {/* Agent statuses */}
-            <div className="detail-card">
-              <div className="detail-card-label">Agent 安装状态</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
-                {filteredSkill.cells.map((cell) => (
-                  <div
-                    key={cell.agentId}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: 12,
-                      padding: "8px 12px",
-                      border: "1px solid var(--border)",
-                      borderRadius: "var(--radius-sm)",
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 13 }}>{cell.agentName}</div>
-                      <div style={{ fontSize: 11, color: "var(--muted2)", marginTop: 2 }}>
-                        {cell.targetPath}
-                      </div>
-                    </div>
-                    <span className="board-status" data-status={cell.displayStatus}>
-                      {cell.displayStatus === "installed" ? "已安装" : cell.displayStatus === "missing" ? "缺失" : "异常"}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Categories */}
-            <div className="detail-card">
-              <div className="detail-card-label">分类</div>
-              <div className="detail-card-content">
-                {!showCategoryEditor ? (
-                  <>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
-                      {filteredSkill.categoryIds.length === 0 ? (
-                        <span style={{ fontSize: 12, color: "var(--muted2)" }}>暂未分类</span>
-                      ) : (
-                        filteredSkill.categoryIds.map((catId) => {
-                          const cat = model.categories.find((c) => c.id === catId);
-                          if (!cat) return null;
-                          return (
-                            <Badge key={catId} variant="custom"
-                              style={{ background: `color-mix(in oklch, ${cat.color} 14%, transparent)`, color: cat.color }}
-                            >
-                              {cat.icon} {cat.name}
-                            </Badge>
-                          );
-                        })
-                      )}
-                    </div>
-                    <button className="btn btn-sm btn-ghost" onClick={() => setShowCategoryEditor(true)}>
-                      编辑分类
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
-                      {model.categories.map((cat) => {
-                        const checked = draftCategoryIds.includes(cat.id);
-                        return (
-                          <label
-                            key={cat.id}
-                            className="cat-checkbox-row"
-                            style={{ background: checked ? `color-mix(in oklch, ${cat.color} 10%, transparent)` : "transparent" }}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => {
-                                setDraftCategoryIds((prev) =>
-                                  checked ? prev.filter((id) => id !== cat.id) : [...prev, cat.id]
-                                );
-                              }}
-                            />
-                            <span>{cat.icon}</span>
-                            <span>{cat.name}</span>
-                            <span style={{ fontSize: 11, color: "var(--muted2)", marginLeft: "auto" }}>{cat.desc}</span>
-                          </label>
-                        );
-                      })}
-                    </div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button
-                        className="btn btn-sm btn-primary"
-                        disabled={uiLocked}
-                        onClick={async () => {
-                          setBusyAction(`cat:${filteredSkill.name}`);
-                          try {
-                            const res = await fetch("/api/skill-categories", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({
-                                skillName: filteredSkill.name,
-                                categoryIds: draftCategoryIds,
-                              }),
-                            });
-                            if (!res.ok) throw new Error(`更新失败：${res.status}`);
-                            addToast("分类已更新");
-                            setShowCategoryEditor(false);
-                            refresh();
-                          } catch (err) {
-                            setSyncError(err instanceof Error ? err.message : "更新分类失败");
-                          } finally {
-                            setBusyAction(null);
-                          }
-                        }}
-                      >
-                        {isBusy(`cat:${filteredSkill.name}`) ? "保存中……" : "保存"}
-                      </button>
-                      <button
-                        className="btn btn-sm btn-ghost"
-                        onClick={() => {
-                          setDraftCategoryIds([...filteredSkill.categoryIds]);
-                          setShowCategoryEditor(false);
-                        }}
-                      >
-                        取消
-                      </button>
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* Description */}
-            {filteredSkill.skillContent && filteredSkill.skillContent !== "未找到 SKILL.md。" && (
-              <div className="detail-card">
-                <div className="detail-card-label">Skill 内容</div>
-                <pre
-                  style={{
-                    marginTop: 8,
-                    padding: 12,
-                    background: "var(--surface2)",
-                    borderRadius: "var(--radius-sm)",
-                    fontSize: 12,
-                    lineHeight: 1.6,
-                    overflow: "auto",
-                    maxHeight: 400,
-                    fontFamily: "var(--font-mono)",
-                  }}
-                >
-                  <code>{filteredSkill.skillContent}</code>
-                </pre>
-              </div>
-            )}
-
-            {/* Actions */}
-            <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-              <button
-                className="btn btn-sm btn-danger"
-                onClick={() => setShowDeleteConfirm(true)}
-                disabled={uiLocked}
-              >
-                <Trash2 size={12} /> 删除副本
-              </button>
-            </div>
-          </div>
-        </div>
+        <SkillDetailDrawer
+          skill={filteredSkill}
+          categories={model.categories}
+          uiLocked={uiLocked}
+          showCategoryEditor={showCategoryEditor}
+          draftCategoryIds={draftCategoryIds}
+          isSyncing={isBusy(`sync:${filteredSkill.name}`)}
+          isTagging={isBusy(`tag:${filteredSkill.name}`)}
+          isSavingCategory={isBusy(`cat:${filteredSkill.name}`)}
+          onClose={() => setSelectedSkill(null)}
+          onToggleCustom={() => handleToggleCustom(filteredSkill.name, filteredSkill.isCustom)}
+          onSync={() =>
+            runSync(
+              { skillName: filteredSkill.name, types: ["create_copy", "repair_copy"] },
+              `sync:${filteredSkill.name}`
+            )
+          }
+          onEditCategories={() => setShowCategoryEditor(true)}
+          onCancelCategoryEdit={() => {
+            setDraftCategoryIds([...filteredSkill.categoryIds]);
+            setShowCategoryEditor(false);
+          }}
+          onDraftCategoryChange={setDraftCategoryIds}
+          onSaveCategories={async () => {
+            setBusyAction(`cat:${filteredSkill.name}`);
+            try {
+              const res = await fetch("/api/skill-categories", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  skillName: filteredSkill.name,
+                  categoryIds: draftCategoryIds,
+                }),
+              });
+              if (!res.ok) throw new Error(`更新失败：${res.status}`);
+              addToast("分类已更新");
+              setShowCategoryEditor(false);
+              refresh();
+            } catch (err) {
+              setSyncError(err instanceof Error ? err.message : "更新分类失败");
+            } finally {
+              setBusyAction(null);
+            }
+          }}
+          onDeleteClick={() => setShowDeleteConfirm(true)}
+        />
       )}
 
       {/* Delete confirm */}
@@ -723,6 +496,364 @@ export function DashboardPage({ model }: { model: SkillBoardModel }) {
         onConfirm={handleDeleteSkill}
         onCancel={() => setShowDeleteConfirm(false)}
       />
+    </div>
+  );
+}
+
+/* ============================================================
+   CategoryFilterBar
+   ============================================================ */
+
+function CategoryFilterBar({
+  model,
+  selectedCategory,
+  onCategoryChange,
+}: {
+  model: SkillBoardModel;
+  selectedCategory: string | null;
+  onCategoryChange: (category: string | null) => void;
+}) {
+  return (
+    <div className="category-filter" style={{ marginTop: -12, marginBottom: 16 }}>
+      <div
+        className={"category-chip" + (selectedCategory === null ? " active" : "")}
+        onClick={() => onCategoryChange(null)}
+      >
+        全部分类
+      </div>
+      <div
+        className={"category-chip" + (selectedCategory === "__custom" ? " active" : "")}
+        onClick={() => onCategoryChange(selectedCategory === "__custom" ? null : "__custom")}
+        style={selectedCategory === "__custom" ? { background: "var(--warm)", borderColor: "var(--warm)" } : undefined}
+      >
+        🏠 自研{" "}
+        <span className="category-chip-count">{model.rows.filter((r) => r.isCustom).length}</span>
+      </div>
+      <div
+        className={"category-chip" + (selectedCategory === "__opensource" ? " active" : "")}
+        onClick={() => onCategoryChange(selectedCategory === "__opensource" ? null : "__opensource")}
+        style={selectedCategory === "__opensource" ? { background: "var(--good)", borderColor: "var(--good)" } : undefined}
+      >
+        📖 开源{" "}
+        <span className="category-chip-count">{model.rows.filter((r) => !r.isCustom).length}</span>
+      </div>
+      {model.categories.map((cat) => {
+        const count = model.rows.filter((r) => r.categoryIds.includes(cat.id)).length;
+        return (
+          <div
+            key={cat.id}
+            className={"category-chip" + (selectedCategory === cat.id ? " active" : "")}
+            onClick={() => onCategoryChange(selectedCategory === cat.id ? null : cat.id)}
+            style={selectedCategory === cat.id ? { background: cat.color, borderColor: cat.color } : undefined}
+          >
+            {cat.icon} {cat.name}{" "}
+            <span className="category-chip-count">{count}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ============================================================
+   InstallModal
+   ============================================================ */
+
+function InstallModal({
+  installSource,
+  uiLocked,
+  isInstalling,
+  onClose,
+  onSourceChange,
+  onInstall,
+}: {
+  installSource: string;
+  uiLocked: boolean;
+  isInstalling: boolean;
+  onClose: () => void;
+  onSourceChange: (value: string) => void;
+  onInstall: () => void;
+}) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-title">通过链接安装 Skill</div>
+        <div className="modal-desc">粘贴 GitHub 或市场链接，自动安装对应的 Skill</div>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            onInstall();
+          }}
+        >
+          <input
+            className="modal-input"
+            type="text"
+            placeholder="https://github.com/xxx/skill-repo"
+            value={installSource}
+            onChange={(e) => onSourceChange(e.target.value)}
+            autoFocus
+          />
+          <div className="modal-actions">
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={onClose}
+            >
+              取消
+            </button>
+            <button
+              type="submit"
+              className="btn btn-primary"
+              disabled={uiLocked || !installSource.trim()}
+            >
+              {isInstalling ? "安装中……" : "安装"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
+   SkillDetailDrawer
+   ============================================================ */
+
+function SkillDetailDrawer({
+  skill,
+  categories,
+  uiLocked,
+  showCategoryEditor,
+  draftCategoryIds,
+  isSyncing,
+  isTagging,
+  isSavingCategory,
+  onClose,
+  onToggleCustom,
+  onSync,
+  onEditCategories,
+  onCancelCategoryEdit,
+  onDraftCategoryChange,
+  onSaveCategories,
+  onDeleteClick,
+}: {
+  skill: SkillBoardRow;
+  categories: SkillBoardModel["categories"];
+  uiLocked: boolean;
+  showCategoryEditor: boolean;
+  draftCategoryIds: string[];
+  isSyncing: boolean;
+  isTagging: boolean;
+  isSavingCategory: boolean;
+  onClose: () => void;
+  onToggleCustom: () => void;
+  onSync: () => void;
+  onEditCategories: () => void;
+  onCancelCategoryEdit: () => void;
+  onDraftCategoryChange: React.Dispatch<React.SetStateAction<string[]>>;
+  onSaveCategories: () => void;
+  onDeleteClick: () => void;
+}) {
+  return (
+    <div className="detail-overlay" onClick={onClose}>
+      <div className="detail-drawer" onClick={(e) => e.stopPropagation()}>
+        {/* Close button */}
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
+          <button className="btn-icon-sm" onClick={onClose}>
+            <X size={14} />
+          </button>
+        </div>
+
+        {/* Hero */}
+        <div className="detail-hero">
+          <div className="detail-hero-icon">
+            {skill.name.charAt(0).toUpperCase()}
+          </div>
+          <div className="detail-hero-info">
+            <div className="detail-hero-name">
+              {skill.name}
+              {skill.isCustom ? (
+                <Badge variant="self">自研</Badge>
+              ) : (
+                <Badge variant="opensource">开源</Badge>
+              )}
+            </div>
+            <div className="detail-hero-desc">{skill.description}</div>
+          </div>
+          <div className="detail-hero-actions">
+            <button
+              className="btn btn-sm btn-outline"
+              onClick={onToggleCustom}
+              disabled={uiLocked}
+            >
+              {isTagging ? (
+                <LoaderCircle size={12} className="spin" />
+              ) : (
+                <Tag size={12} />
+              )}
+              {skill.isCustom ? "取消自研" : "标记自研"}
+            </button>
+            <button
+              className="btn btn-sm btn-primary"
+              onClick={onSync}
+              disabled={uiLocked || !skill.canSync}
+            >
+              {isSyncing ? (
+                <LoaderCircle size={12} className="spin" />
+              ) : (
+                <HardDriveDownload size={12} />
+              )}
+              同步
+            </button>
+          </div>
+        </div>
+
+        {/* Source */}
+        <div className="detail-card">
+          <div className="detail-card-label">源文件</div>
+          <div className="detail-card-content" style={{ fontFamily: "var(--font-mono)", fontSize: 12, wordBreak: "break-all" }}>
+            {skill.skillFilePath}
+          </div>
+        </div>
+
+        {/* Agent statuses */}
+        <div className="detail-card">
+          <div className="detail-card-label">Agent 安装状态</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+            {skill.cells.map((cell) => (
+              <div
+                key={cell.agentId}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                  padding: "8px 12px",
+                  border: "1px solid var(--border)",
+                  borderRadius: "var(--radius-sm)",
+                }}
+              >
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{cell.agentName}</div>
+                  <div style={{ fontSize: 11, color: "var(--muted2)", marginTop: 2 }}>
+                    {cell.targetPath}
+                  </div>
+                </div>
+                <span className="board-status" data-status={cell.displayStatus}>
+                  {cell.displayStatus === "installed" ? "已安装" : cell.displayStatus === "missing" ? "缺失" : "异常"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Categories */}
+        <div className="detail-card">
+          <div className="detail-card-label">分类</div>
+          <div className="detail-card-content">
+            {!showCategoryEditor ? (
+              <>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 8 }}>
+                  {skill.categoryIds.length === 0 ? (
+                    <span style={{ fontSize: 12, color: "var(--muted2)" }}>暂未分类</span>
+                  ) : (
+                    skill.categoryIds.map((catId) => {
+                      const cat = categories.find((c) => c.id === catId);
+                      if (!cat) return null;
+                      return (
+                        <Badge key={catId} variant="custom"
+                          style={{ background: `color-mix(in oklch, ${cat.color} 14%, transparent)`, color: cat.color }}
+                        >
+                          {cat.icon} {cat.name}
+                        </Badge>
+                      );
+                    })
+                  )}
+                </div>
+                <button className="btn btn-sm btn-ghost" onClick={onEditCategories}>
+                  编辑分类
+                </button>
+              </>
+            ) : (
+              <>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+                  {categories.map((cat) => {
+                    const checked = draftCategoryIds.includes(cat.id);
+                    return (
+                      <label
+                        key={cat.id}
+                        className="cat-checkbox-row"
+                        style={{ background: checked ? `color-mix(in oklch, ${cat.color} 10%, transparent)` : "transparent" }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => {
+                            onDraftCategoryChange((prev) =>
+                              checked ? prev.filter((id) => id !== cat.id) : [...prev, cat.id]
+                            );
+                          }}
+                        />
+                        <span>{cat.icon}</span>
+                        <span>{cat.name}</span>
+                        <span style={{ fontSize: 11, color: "var(--muted2)", marginLeft: "auto" }}>{cat.desc}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    className="btn btn-sm btn-primary"
+                    disabled={uiLocked}
+                    onClick={onSaveCategories}
+                  >
+                    {isSavingCategory ? "保存中……" : "保存"}
+                  </button>
+                  <button
+                    className="btn btn-sm btn-ghost"
+                    onClick={onCancelCategoryEdit}
+                  >
+                    取消
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Description */}
+        {skill.skillContent && skill.skillContent !== "未找到 SKILL.md。" && (
+          <div className="detail-card">
+            <div className="detail-card-label">Skill 内容</div>
+            <pre
+              style={{
+                marginTop: 8,
+                padding: 12,
+                background: "var(--surface2)",
+                borderRadius: "var(--radius-sm)",
+                fontSize: 12,
+                lineHeight: 1.6,
+                overflow: "auto",
+                maxHeight: 400,
+                fontFamily: "var(--font-mono)",
+              }}
+            >
+              <code>{skill.skillContent}</code>
+            </pre>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+          <button
+            className="btn btn-sm btn-danger"
+            onClick={onDeleteClick}
+            disabled={uiLocked}
+          >
+            <Trash2 size={12} /> 删除副本
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -6,8 +6,21 @@ const STORE_PATH = join(process.cwd(), "config", "skill-categories.json");
 export async function readSkillCategories(): Promise<Record<string, string[]>> {
   try {
     const raw = await readFile(STORE_PATH, "utf8");
-    const parsed = JSON.parse(raw);
-    return typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+    const parsed: unknown = JSON.parse(raw);
+    if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const result: Record<string, string[]> = {};
+      for (const [key, value] of Object.entries(parsed)) {
+        if (
+          typeof key === "string" &&
+          Array.isArray(value) &&
+          value.every((v) => typeof v === "string")
+        ) {
+          result[key] = value;
+        }
+      }
+      return result;
+    }
+    return {};
   } catch {
     return {};
   }

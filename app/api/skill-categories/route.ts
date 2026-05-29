@@ -1,6 +1,12 @@
+import { z } from "zod";
 import { NextResponse } from "next/server";
 
 import { readSkillCategories, setSkillCategories } from "@/src/lib/config/skill-categories-store";
+
+const postBodySchema = z.object({
+  skillName: z.string().min(1),
+  categoryIds: z.array(z.string()),
+});
 
 export async function GET() {
   const map = await readSkillCategories();
@@ -9,26 +15,18 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as {
-      skillName: string;
-      categoryIds: string[];
-    };
-    if (typeof body.skillName !== "string" || !body.skillName) {
-      return NextResponse.json(
-        { error: "Missing skillName" },
-        { status: 400 }
-      );
-    }
-    if (!Array.isArray(body.categoryIds)) {
-      return NextResponse.json(
-        { error: "categoryIds must be an array" },
-        { status: 400 }
-      );
-    }
+    const raw = await request.json();
+    const body = postBodySchema.parse(raw);
     await setSkillCategories(body.skillName, body.categoryIds);
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[skill-categories] POST error:", err);
+    if (err instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: err.issues.map((e) => e.message).join(", ") },
+        { status: 400 }
+      );
+    }
+    console.warn("[skill-categories] POST failed");
     return NextResponse.json(
       { error: "更新分类失败" },
       { status: 500 }

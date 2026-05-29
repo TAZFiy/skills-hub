@@ -1,5 +1,5 @@
 import { cp, mkdir, rm } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, resolve, sep } from "node:path";
 
 import type { SyncExecutionResult, SyncPlan } from "@/src/types/sync";
 
@@ -14,9 +14,11 @@ async function copySkill(sourcePath: string, targetPath: string) {
 }
 
 function isSourceAllowed(sourcePath: string, allowedRoots: string[]): boolean {
-  return allowedRoots.some(
-    (root) => sourcePath === root || sourcePath.startsWith(root + "/")
-  );
+  const resolvedSource = resolve(sourcePath);
+  return allowedRoots.some((root) => {
+    const resolvedRoot = resolve(root);
+    return resolvedSource === resolvedRoot || resolvedSource.startsWith(resolvedRoot + sep);
+  });
 }
 
 export async function applySyncPlan(
