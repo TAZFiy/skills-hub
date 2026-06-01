@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- Winged sandal / caduceus-inspired Hermes icon -->
+  <circle cx="32" cy="32" r="30" stroke="currentColor" stroke-width="3" fill="none"/>
+  <!-- Wing left -->
+  <path d="M14 28 Q10 18 18 14 Q22 12 26 20" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M16 26 Q8 20 12 12" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <!-- Wing right -->
+  <path d="M50 28 Q54 18 46 14 Q42 12 38 20" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M48 26 Q56 20 52 12" stroke="currentColor" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <!-- Staff -->
+  <line x1="32" y1="20" x2="32" y2="50" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+  <!-- Serpents -->
+  <path d="M28 34 Q22 32 24 28 Q26 24 30 32" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M36 34 Q42 32 40 28 Q38 24 34 32" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>
+</svg>
